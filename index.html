@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+<title>SunTrack — Solar Sales Pipeline</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    --dawn-1:#1b2a4a;
+    --dawn-2:#3d5a80;
+    --sun-1:#f6a531;
+    --sun-2:#ef7d2e;
+    --panel-navy:#16233d;
+    --paper:#fbf8f2;
+    --paper-dim:#f1ece1;
+    --ink:#1c2432;
+    --ink-soft:#5b6478;
+    --line:#e4ddcd;
+    --white:#ffffff;
+    --good:#2f8f5b;
+    --warn:#c65a2e;
+    --lost:#9a3b3b;
+    --radius-card: 10px;
+    --radius-sm: 6px;
+    --shadow-1: 0 1px 2px rgba(27,42,74,0.06), 0 1px 1px rgba(27,42,74,0.04);
+    --shadow-2: 0 8px 24px rgba(27,42,74,0.14);
+    font-size: 16px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family: 'Iowan Old Style','Georgia','Charter',serif;
+    background: var(--paper);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    min-height:100vh;
+  }
+  .sans{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif; }
+  h1,h2,h3,h4{ font-family:'Iowan Old Style','Georgia',serif; font-weight:600; margin:0; }
+  button, input, select, textarea{ font-family: inherit; }
+  a{ color: inherit; }
+
+  /* ---------- Loading / Auth screens ---------- */
+  #app{ min-height:100vh; display:flex; flex-direction:column; }
+  .center-screen{
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background: radial-gradient(120% 140% at 15% 0%, var(--dawn-2) 0%, var(--dawn-1) 55%, #101a30 100%);
+    padding: 24px;
+  }
+  .auth-card{
+    width:100%; max-width:400px;
+    background: var(--paper);
+    border-radius: 14px;
+    padding: 36px 32px 32px;
+    box-shadow: var(--shadow-2);
+  }
+  .auth-brand{ display:flex; align-items:center; gap:10px; margin-bottom:22px; }
+  .sunmark{
+    width:34px; height:34px; border-radius:50%;
+    background: linear-gradient(135deg, var(--sun-1), var(--sun-2));
+    flex-shrink:0;
+  }
+  .auth-brand .name{ font-size:1.3rem; letter-spacing:0.2px; }
+  .auth-brand .tag{ font-family: inherit; font-size:0.78rem; color:var(--ink-soft); }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:0.82rem; color:var(--ink-soft); margin-bottom:5px; font-family: -apple-system,sans-serif; }
+  .field input, .field select, .field textarea{
+    width:100%; padding:10px 12px; border:1px solid var(--line); border-radius: var(--radius-sm);
+    font-size:0.95rem; background:var(--white); color:var(--ink);
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{
+    outline:none; border-color: var(--sun-2); box-shadow: 0 0 0 3px rgba(239,125,46,0.14);
+  }
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    border:none; cursor:pointer; border-radius: var(--radius-sm);
+    padding:10px 16px; font-size:0.92rem; font-weight:600;
+    font-family: -apple-system, sans-serif;
+    transition: transform .08s ease, box-shadow .15s ease, background .15s ease;
+  }
+  .btn:active{ transform: translateY(1px); }
+  .btn-primary{ background: linear-gradient(135deg, var(--sun-1), var(--sun-2)); color:#2a1608; }
+  .btn-primary:hover{ box-shadow: 0 4px 14px rgba(239,125,46,0.35); }
+  .btn-primary:disabled{ opacity:0.55; cursor:not-allowed; box-shadow:none; }
+  .btn-ghost{ background: transparent; color: var(--ink-soft); border:1px solid var(--line); }
+  .btn-ghost:hover{ background: var(--paper-dim); }
+  .btn-block{ width:100%; }
+  .btn-sm{ padding:7px 12px; font-size:0.82rem; }
+  .auth-toggle{ margin-top:16px; text-align:center; font-size:0.84rem; color:var(--ink-soft); font-family:-apple-system,sans-serif; }
+  .auth-toggle button{ background:none; border:none; color: var(--sun-2); font-weight:600; cursor:pointer; text-decoration:underline; font-size:inherit; }
+  .auth-error{ background:#fbeae5; color:var(--lost); border:1px solid #eeccc0; padding:9px 12px; border-radius:var(--radius-sm); font-size:0.83rem; margin-bottom:14px; font-family:-apple-system,sans-serif; }
+  .auth-note{ font-size:0.76rem; color:var(--ink-soft); margin-top:18px; line-height:1.5; font-family:-apple-system,sans-serif; }
+
+  /* ---------- Top bar ---------- */
+  header.topbar{
+    background: var(--panel-navy);
+    color: var(--paper);
+    padding: 12px 20px;
+    display:flex; align-items:center; justify-content:space-between;
+    position: sticky; top:0; z-index: 40;
+    box-shadow: var(--shadow-1);
+  }
+  .topbar-left{ display:flex; align-items:center; gap:10px; }
+  .topbar .name{ font-size:1.08rem; }
+  .topbar-right{ display:flex; align-items:center; gap:10px; }
+  .icon-btn{
+    background: rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.14); color:var(--paper);
+    width:36px;height:36px;border-radius:8px; display:flex;align-items:center;justify-content:center;
+    cursor:pointer; font-family:-apple-system,sans-serif;
+  }
+  .icon-btn:hover{ background: rgba(255,255,255,0.16); }
+
+  /* ---------- Main layout ---------- */
+  main{ flex:1; padding: 18px 16px 60px; max-width:1400px; width:100%; margin:0 auto; }
+
+  .toolbar{
+    display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:18px;
+    font-family:-apple-system,sans-serif;
+  }
+  .toolbar input[type=search]{
+    flex:1; min-width:180px; padding:9px 12px; border:1px solid var(--line); border-radius:var(--radius-sm);
+    background:var(--white); font-size:0.9rem;
+  }
+  .toolbar select{
+    padding:9px 10px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--white); font-size:0.9rem;
+  }
+  .view-toggle{ display:flex; border:1px solid var(--line); border-radius:var(--radius-sm); overflow:hidden; }
+  .view-toggle button{
+    background:var(--white); border:none; padding:9px 14px; font-size:0.85rem; cursor:pointer; font-family:-apple-system,sans-serif; color:var(--ink-soft);
+  }
+  .view-toggle button.active{ background: var(--panel-navy); color:var(--paper); }
+
+  .stats-row{
+    display:grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr)); gap:10px; margin-bottom:18px;
+  }
+  .stat-card{
+    background:var(--white); border:1px solid var(--line); border-radius:var(--radius-card); padding:12px 14px;
+  }
+  .stat-card .num{ font-size:1.5rem; font-weight:600; }
+  .stat-card .lbl{ font-size:0.72rem; color:var(--ink-soft); text-transform: none; font-family:-apple-system,sans-serif; margin-top:2px;}
+
+  /* ---------- Kanban board ---------- */
+  .board{
+    display:flex; gap:14px; overflow-x:auto; padding-bottom:10px; -webkit-overflow-scrolling: touch;
+  }
+  .col{
+    background: var(--paper-dim);
+    border-radius: var(--radius-card);
+    min-width: 250px; max-width:270px; flex:1 0 250px;
+    padding: 10px;
+    display:flex; flex-direction:column;
+    max-height: calc(100vh - 230px);
+  }
+  .col.drag-over{ outline: 2px dashed var(--sun-2); outline-offset: -4px; }
+  .col-head{ display:flex; align-items:center; justify-content:space-between; padding: 4px 4px 10px; font-family:-apple-system,sans-serif;}
+  .col-head .dot{ width:9px;height:9px;border-radius:50%; display:inline-block; margin-right:7px; }
+  .col-head .title{ font-weight:600; font-size:0.86rem; }
+  .col-head .count{ font-size:0.76rem; color:var(--ink-soft); background:var(--white); padding:1px 8px; border-radius:10px; }
+  .col-body{ overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding: 2px 2px 6px; flex:1; }
+  .col-body:empty::after{ content:"No customers here"; font-family:-apple-system,sans-serif; font-size:0.78rem; color:#b5ac97; text-align:center; padding: 18px 6px; display:block; }
+
+  .card{
+    background: var(--white); border:1px solid var(--line); border-radius:8px;
+    padding: 10px 11px; cursor:grab; box-shadow: var(--shadow-1); font-family:-apple-system,sans-serif;
+    transition: box-shadow .12s ease, transform .12s ease;
+  }
+  .card:active{ cursor:grabbing; }
+  .card.dragging{ opacity:0.4; }
+  .card:hover{ box-shadow: 0 3px 10px rgba(27,42,74,0.14); }
+  .card .cname{ font-weight:600; font-size:0.93rem; margin-bottom:3px; }
+  .card .cmeta{ font-size:0.76rem; color:var(--ink-soft); line-height:1.4; }
+  .card .cfollow{
+    margin-top:7px; font-size:0.72rem; padding:3px 7px; border-radius:5px; display:inline-block;
+  }
+  .cfollow.overdue{ background:#fbe4e0; color:var(--lost); }
+  .cfollow.today{ background:#fff0da; color:var(--warn); }
+  .cfollow.upcoming{ background:#e7f3ec; color:var(--good); }
+  .cfollow.none{ background:#eee; color:#999; }
+
+  /* ---------- List view ---------- */
+  .list-wrap{ background:var(--white); border:1px solid var(--line); border-radius:var(--radius-card); overflow:hidden; }
+  table{ width:100%; border-collapse:collapse; font-family:-apple-system,sans-serif; font-size:0.86rem; }
+  thead th{
+    text-align:left; padding:10px 12px; background: var(--paper-dim); color:var(--ink-soft); font-weight:600;
+    font-size:0.74rem; text-transform:none; border-bottom:1px solid var(--line); white-space:nowrap;
+  }
+  tbody td{ padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody tr{ cursor:pointer; }
+  tbody tr:hover{ background: #fbf9f4; }
+  .stage-pill{ font-size:0.72rem; padding:3px 9px; border-radius:12px; font-weight:600; white-space:nowrap; }
+
+  .table-scroll{ overflow-x:auto; }
+
+  /* ---------- Modal ---------- */
+  .overlay{
+    position:fixed; inset:0; background: rgba(20,25,40,0.55); z-index:60;
+    display:flex; align-items:flex-end; justify-content:center;
+  }
+  @media (min-width: 640px){
+    .overlay{ align-items:center; }
+  }
+  .modal{
+    background: var(--paper); width:100%; max-width:560px; max-height: 92vh; overflow-y:auto;
+    border-radius: 16px 16px 0 0; padding: 22px 20px 28px;
+    font-family:-apple-system,sans-serif;
+  }
+  @media (min-width: 640px){
+    .modal{ border-radius:16px; padding:26px 28px 30px; }
+  }
+  .modal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+  .modal-head h2{ font-size:1.15rem; font-family:'Iowan Old Style',Georgia,serif; }
+  .close-x{ background:none; border:none; font-size:1.3rem; cursor:pointer; color:var(--ink-soft); line-height:1; padding:4px; }
+  .form-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:12px 12px; }
+  .form-grid .full{ grid-column: 1/-1; }
+  @media (max-width: 480px){ .form-grid{ grid-template-columns: 1fr; } }
+  .modal-actions{ display:flex; gap:10px; justify-content:space-between; margin-top:20px; }
+  .modal-actions .left{ display:flex; gap:10px; }
+
+  .section-label{
+    font-size:0.72rem; color:var(--ink-soft); font-weight:700; letter-spacing:0.3px; margin: 18px 0 8px;
+    padding-top:14px; border-top:1px solid var(--line);
+  }
+  .section-label:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+
+  .empty-state{
+    text-align:center; padding: 60px 20px; color:var(--ink-soft); font-family:-apple-system,sans-serif;
+  }
+  .empty-state .sunmark{ margin: 0 auto 14px; width:46px; height:46px; }
+  .empty-state h3{ font-family:-apple-system,sans-serif; color:var(--ink); margin-bottom:6px; }
+
+  .toast{
+    position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
+    background: var(--panel-navy); color:var(--paper); padding:10px 18px; border-radius:8px;
+    font-family:-apple-system,sans-serif; font-size:0.85rem; z-index:80; box-shadow:var(--shadow-2);
+  }
+
+  .role-badge{
+    font-family:-apple-system,sans-serif; font-size:0.72rem; text-transform:uppercase;
+    letter-spacing:0.5px; color:#f6d59c; border:1px solid rgba(246,213,156,0.35);
+    padding:4px 7px; border-radius:5px;
+  }
+  .access-note{
+    font-family:-apple-system,sans-serif; font-size:0.8rem; color:var(--ink-soft);
+    margin:-8px 0 16px;
+  }
+  .user-table{ width:100%; border-collapse:collapse; font-family:-apple-system,sans-serif; font-size:0.85rem; }
+  .user-table th,.user-table td{ text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); }
+  .user-table th{ color:var(--ink-soft); font-size:0.72rem; font-weight:600; }
+  .user-table select{ padding:6px 8px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--white); }
+
+  ::-webkit-scrollbar{ height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb{ background: #d8d0bc; border-radius:8px; }
+
+  .hidden{ display:none !important; }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ===================== AUTH SCREEN ===================== -->
+  <div id="authScreen" class="center-screen">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <div class="sunmark"></div>
+        <div>
+          <div class="name">SunTrack</div>
+          <div class="tag">Solar sales pipeline</div>
+        </div>
+      </div>
+
+      <div id="authError" class="auth-error hidden"></div>
+
+      <form id="authForm">
+        <div class="field">
+          <label for="authName">Your name</label>
+          <input type="text" id="authName" required autocomplete="name" placeholder="e.g. Rohan Mehta" />
+        </div>
+        <div class="field">
+          <label for="authPhone">Phone number</label>
+          <input type="tel" id="authPhone" required autocomplete="tel" placeholder="e.g. 9876543210" />
+        </div>
+        <button type="submit" id="authSubmitBtn" class="btn btn-primary btn-block">Continue</button>
+      </form>
+
+      <div class="auth-note">
+        Sign in with your assigned admin or superadmin name and phone number.
+        <br><br>
+        Only admin and superadmin accounts can access this dashboard. If you haven't connected a database yet, see <code>setup.md</code> in your project files.
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== MAIN APP ===================== -->
+  <div id="mainApp" class="hidden">
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="sunmark" style="width:26px;height:26px;"></div>
+        <span class="name">SunTrack</span>
+        <span class="role-badge" id="roleBadge">user</span>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-primary btn-sm" id="addCustomerBtn">+ New customer</button>
+        <button class="icon-btn hidden" id="userAccessBtn" title="Manage user access">♙</button>
+        <button class="icon-btn" id="exportBtn" title="Export CSV">⭳</button>
+        <button class="icon-btn" id="signOutBtn" title="Sign out">⏻</button>
+      </div>
+    </header>
+
+    <main>
+      <div class="access-note hidden" id="accessNote">Shared pipeline access is enabled for managers.</div>
+      <div class="stats-row" id="statsRow"></div>
+
+      <div class="toolbar">
+        <input type="search" id="searchInput" placeholder="Search by name, phone, or email…" />
+        <select id="stageFilter">
+          <option value="">All stages</option>
+        </select>
+        <select id="followFilter">
+          <option value="">Any follow-up</option>
+          <option value="overdue">Overdue</option>
+          <option value="today">Due today</option>
+          <option value="upcoming">Upcoming</option>
+          <option value="none">Not set</option>
+        </select>
+        <div class="view-toggle">
+          <button id="viewBoardBtn" class="active">Board</button>
+          <button id="viewListBtn">List</button>
+        </div>
+      </div>
+
+      <div id="boardView" class="board"></div>
+
+      <div id="listView" class="list-wrap hidden">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Stage</th>
+                <th>Phone</th>
+                <th>Property</th>
+                <th>System size</th>
+                <th>Next follow-up</th>
+                <th>Inquiry date</th>
+              </tr>
+            </thead>
+            <tbody id="listBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="emptyState" class="empty-state hidden">
+        <div class="sunmark"></div>
+        <h3>No customers yet</h3>
+        <p>Add your first lead to start tracking your pipeline.</p>
+        <button class="btn btn-primary" id="emptyAddBtn" style="margin-top:8px;">+ New customer</button>
+      </div>
+    </main>
+  </div>
+
+</div>
+
+<!-- ===================== CUSTOMER MODAL ===================== -->
+<div id="modalOverlay" class="overlay hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="modalTitle">New customer</h2>
+      <button class="close-x" id="modalCloseBtn">&times;</button>
+    </div>
+
+    <form id="customerForm">
+      <input type="hidden" id="custId" />
+
+      <div class="section-label">CONTACT</div>
+      <div class="form-grid">
+        <div class="field full">
+          <label>Full name *</label>
+          <input type="text" id="f_name" required />
+        </div>
+        <div class="field">
+          <label>Phone</label>
+          <input type="tel" id="f_phone" />
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="f_email" />
+        </div>
+      </div>
+
+      <div class="section-label">PROPERTY & PROJECT</div>
+      <div class="form-grid">
+        <div class="field full">
+          <label>Property address</label>
+          <input type="text" id="f_address" />
+        </div>
+        <div class="field">
+          <label>Inquiry type</label>
+          <select id="f_inquiry_type">
+            <option>Residential</option>
+            <option>Commercial</option>
+            <option>Battery storage</option>
+            <option>Repair / maintenance</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Roof type</label>
+          <select id="f_roof_type">
+            <option value="">—</option>
+            <option>Asphalt shingle</option>
+            <option>Metal</option>
+            <option>Tile</option>
+            <option>Flat</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>System size (kW)</label>
+          <input type="number" step="0.1" min="0" id="f_system_size" />
+        </div>
+        <div class="field">
+          <label>Budget ($)</label>
+          <input type="number" step="1" min="0" id="f_budget" />
+        </div>
+        <div class="field full">
+          <label>Utility company</label>
+          <input type="text" id="f_utility" />
+        </div>
+      </div>
+
+      <div class="section-label">PIPELINE</div>
+      <div class="form-grid">
+        <div class="field">
+          <label>Stage</label>
+          <select id="f_stage"></select>
+        </div>
+        <div class="field">
+          <label>Inquiry date</label>
+          <input type="date" id="f_inquiry_date" />
+        </div>
+        <div class="field">
+          <label>Next follow-up date</label>
+          <input type="date" id="f_follow_up_date" />
+        </div>
+        <div class="field full">
+          <label>Next action / notes</label>
+          <textarea id="f_next_action" rows="3" placeholder="e.g. Call to confirm site visit time"></textarea>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <div class="left">
+          <button type="button" class="btn btn-ghost" id="deleteCustBtn">Delete</button>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button type="button" class="btn btn-ghost" id="modalCancelBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="saveCustBtn">Save</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="userOverlay" class="overlay hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>User access</h2>
+      <button class="close-x" id="userModalCloseBtn">&times;</button>
+    </div>
+    <p class="access-note">Only superadmins can change roles. Only admin and superadmin accounts can access this application.</p>
+    <div class="table-scroll">
+      <table class="user-table">
+        <thead><tr><th>Name</th><th>Phone</th><th>Role</th></tr></thead>
+        <tbody id="userListBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   SunTrack — Solar Sales Pipeline CRM
+   Single-file app. Talks to Supabase (Postgres + Auth) for storage.
+   See SETUP.md for how to create your free Supabase project and plug in
+   the two values below.
+   ========================================================================= */
+
+// ---- 1. CONFIGURE YOUR SUPABASE PROJECT HERE ----
+const SUPABASE_URL = "https://onceczvmbdfowfierlnv.supabase.co";       // e.g. https://xxxxx.supabase.co
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9uY2VjenZtYmRmb3dmaWVybG52Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwMDcyMDksImV4cCI6MjEwNDU4MzIwOX0.2etlNa7i_bpxxZt0Ee8aGTcGBH7H-IW6Jo5Yje4iEqo";
+
+// ---- 2. DEFINE YOUR PIPELINE STAGES HERE ----
+const STAGES = [
+  { key: "new_lead",   label: "New Lead",   color: "#3d5a80" },
+  { key: "contacted",  label: "Contacted",  color: "#5b7ea6" },
+  { key: "quoted",     label: "Quoted",     color: "#f6a531" },
+  { key: "negotiated", label: "Negotiated", color: "#ef7d2e" },
+  { key: "installed",  label: "Installed",  color: "#7a9a5f" },
+  { key: "won",        label: "Won",        color: "#2f8f5b" },
+  { key: "lost",       label: "Loss",       color: "#9a3b3b" },
+];
+
+const TABLE = "customers";
+
+let supabase = null;
+let currentUser = null;
+let currentRole = "user";
+let customers = [];
+let appUsers = [];
+let currentView = "board";
+let editingId = null;
+
+// ---------------- Init ----------------
+function init(){
+  if (!window.supabase || SUPABASE_URL.includes("YOUR_SUPABASE")) {
+    showConfigWarning();
+    return;
+  }
+  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  populateStageSelects();
+  wireAuthForm();
+  wireAppEvents();
+
+  supabase.auth.getSession().then(({ data }) => {
+    if (data.session) {
+      onSignedIn(data.session.user);
+    }
+  });
+
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_IN" && session) onSignedIn(session.user);
+    if (event === "SIGNED_OUT") onSignedOut();
+  });
+}
+
+function showConfigWarning(){
+  document.getElementById("authScreen").innerHTML = `
+    <div class="auth-card">
+      <div class="auth-brand">
+        <div class="sunmark"></div>
+        <div><div class="name">SunTrack</div><div class="tag">Setup needed</div></div>
+      </div>
+      <p style="font-family:-apple-system,sans-serif; font-size:0.9rem; line-height:1.6; color:var(--ink-soft);">
+        This app isn't connected to a database yet. Open <code>index.html</code> and fill in
+        <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> near the top of the script.
+        Full step-by-step instructions are in <strong>SETUP.md</strong>.
+      </p>
+    </div>`;
+}
+
+// ---------------- Auth ----------------
+// Supabase still needs an email/password pair internally, so manager
+// credentials are derived from the name and phone supplied at login.
+const MANAGER_BOOTSTRAP = {
+  "superadmin|9000000001": "superadmin",
+  "admin|9000000002": "admin",
+};
+
+function credentialsFor(name, phone){
+  const digits = phone.replace(/\D/g, "");
+  const namePart = name.trim().toLowerCase().replace(/\s+/g, "");
+  const email = `u${digits}@suntrack.local`;
+  const password = `${digits}-${namePart}`.slice(0, 72);
+  return { email, password };
+}
+
+function humanizeAuthError(err){
+  const msg = (err && err.message) || "";
+  if (/invalid login credentials/i.test(msg)) {
+    return "That name and phone number don't match an existing account. Double-check for typos, or use a different combo to create a new one.";
+  }
+  if (/user already registered/i.test(msg)) {
+    return "That manager account already exists. Check the name and phone number.";
+  }
+  return msg || "Something went wrong. Please try again.";
+}
+
+function managerKey(name, phone){
+  return `${name.trim().toLowerCase().replace(/\s+/g, " ")}|${phone.replace(/\D/g, "")}`;
+}
+
+function managerRoleFor(name, phone){
+  return MANAGER_BOOTSTRAP[managerKey(name, phone)] || null;
+}
+
+function wireAuthForm(){
+  document.getElementById("authForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    hideAuthError();
+
+    const name = document.getElementById("authName").value.trim();
+    const phone = document.getElementById("authPhone").value.trim();
+    if (!name || !phone) return;
+
+    if (!managerRoleFor(name, phone)) {
+      showAuthError("Only the seeded admin and superadmin accounts can access this application.");
+      return;
+    }
+
+    const btn = document.getElementById("authSubmitBtn");
+    btn.disabled = true;
+    btn.textContent = "Please wait…";
+
+    const { email, password } = credentialsFor(name, phone);
+
+    try {
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) {
+        const { error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { full_name: name, phone: phone } },
+        });
+        if (signUpError) throw signUpError;
+      }
+    } catch (err) {
+      showAuthError(humanizeAuthError(err));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Continue";
+    }
+  });
+}
+
+function showAuthError(msg, isInfo){
+  const el = document.getElementById("authError");
+  el.textContent = msg;
+  el.classList.remove("hidden");
+  if (isInfo) { el.style.background = "#e7f3ec"; el.style.color = "var(--good)"; el.style.borderColor = "#cfe6da"; }
+  else { el.style.background = "#fbeae5"; el.style.color = "var(--lost)"; el.style.borderColor = "#eeccc0"; }
+}
+function hideAuthError(){ document.getElementById("authError").classList.add("hidden"); }
+
+async function onSignedIn(user){
+  currentUser = user;
+  await loadCurrentRole(user.id);
+  if (currentRole !== "admin" && currentRole !== "superadmin") {
+    await supabase.auth.signOut();
+    showAuthError("This account does not have admin access. Contact the superadmin.");
+    return;
+  }
+  document.getElementById("authScreen").classList.add("hidden");
+  document.getElementById("mainApp").classList.remove("hidden");
+  const displayName = user.user_metadata?.full_name;
+  document.querySelector(".topbar .name").textContent = displayName || "SunTrack";
+  document.getElementById("roleBadge").textContent = currentRole;
+  document.getElementById("userAccessBtn").classList.toggle("hidden", currentRole !== "superadmin");
+  document.getElementById("accessNote").classList.toggle("hidden", currentRole === "user");
+  await loadCustomers();
+}
+
+async function loadCurrentRole(userId){
+  const { data, error } = await supabase
+    .from("app_users")
+    .select("role")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) {
+    toast("Couldn't load your access role: " + error.message);
+    currentRole = "user";
+    return;
+  }
+  currentRole = data?.role || "user";
+}
+
+function onSignedOut(){
+  currentUser = null;
+  currentRole = "user";
+  customers = [];
+  appUsers = [];
+  document.getElementById("mainApp").classList.add("hidden");
+  document.getElementById("authScreen").classList.remove("hidden");
+  document.getElementById("authForm").reset();
+  document.querySelector(".topbar .name").textContent = "SunTrack";
+  document.getElementById("roleBadge").textContent = "user";
+  document.getElementById("userAccessBtn").classList.add("hidden");
+  document.getElementById("accessNote").classList.add("hidden");
+}
+
+// ---------------- Data ----------------
+async function loadCustomers(){
+  const { data, error } = await supabase
+    .from(TABLE)
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    toast("Couldn't load customers: " + error.message);
+    return;
+  }
+  customers = data || [];
+  render();
+}
+
+async function loadAppUsers(){
+  const { data, error } = await supabase
+    .from("app_users")
+    .select("user_id, full_name, phone, role, created_at")
+    .order("created_at", { ascending: true });
+  if (error) { toast("Couldn't load users: " + error.message); return; }
+  appUsers = data || [];
+  renderAppUsers();
+}
+
+function openUserAccess(){
+  if (currentRole !== "superadmin") return;
+  document.getElementById("userOverlay").classList.remove("hidden");
+  loadAppUsers();
+}
+
+function closeUserAccess(){
+  document.getElementById("userOverlay").classList.add("hidden");
+}
+
+async function updateUserRole(userId, role){
+  if (currentRole !== "superadmin" || userId === currentUser.id) return;
+  const { error } = await supabase.from("app_users").update({ role }).eq("user_id", userId);
+  if (error) { toast("Couldn't update role: " + error.message); return; }
+  toast("User role updated");
+  await loadAppUsers();
+}
+
+function renderAppUsers(){
+  const body = document.getElementById("userListBody");
+  body.innerHTML = "";
+  appUsers.forEach(user => {
+    const row = document.createElement("tr");
+    const locked = user.user_id === currentUser.id;
+    row.innerHTML = `
+      <td>${escapeHtml(user.full_name || "Unnamed")}${locked ? " (you)" : ""}</td>
+      <td>${escapeHtml(user.phone || "—")}</td>
+      <td><select data-user-id="${user.user_id}" ${locked ? "disabled" : ""}>
+        <option value="admin" ${user.role === "admin" ? "selected" : ""}>Admin</option>
+        <option value="superadmin" ${user.role === "superadmin" ? "selected" : ""}>Superadmin</option>
+      </select></td>`;
+    body.appendChild(row);
+  });
+  body.querySelectorAll("select[data-user-id]").forEach(select => {
+    select.addEventListener("change", () => updateUserRole(select.dataset.userId, select.value));
+  });
+}
+
+async function saveCustomer(payload, id){
+  if (id) {
+    const { error } = await supabase.from(TABLE).update(payload).eq("id", id);
+    if (error) throw error;
+  } else {
+    payload.user_id = currentUser.id;
+    const { error } = await supabase.from(TABLE).insert(payload);
+    if (error) throw error;
+  }
+  await loadCustomers();
+}
+
+async function deleteCustomer(id){
+  const { error } = await supabase.from(TABLE).delete().eq("id", id);
+  if (error) { toast("Delete failed: " + error.message); return; }
+  await loadCustomers();
+}
+
+async function updateStage(id, newStage){
+  const { error } = await supabase.from(TABLE).update({ stage: newStage }).eq("id", id);
+  if (error) { toast("Couldn't move customer: " + error.message); return; }
+  const c = customers.find(x => x.id === id);
+  if (c) c.stage = newStage;
+  render();
+}
+
+// ---------------- UI wiring ----------------
+function wireAppEvents(){
+  document.getElementById("signOutBtn").addEventListener("click", async () => {
+    await supabase.auth.signOut();
+  });
+
+  document.getElementById("userAccessBtn").addEventListener("click", openUserAccess);
+  document.getElementById("userModalCloseBtn").addEventListener("click", closeUserAccess);
+  document.getElementById("userOverlay").addEventListener("click", (e) => {
+    if (e.target.id === "userOverlay") closeUserAccess();
+  });
+
+  document.getElementById("addCustomerBtn").addEventListener("click", () => openModal());
+  document.getElementById("emptyAddBtn").addEventListener("click", () => openModal());
+  document.getElementById("modalCloseBtn").addEventListener("click", closeModal);
+  document.getElementById("modalCancelBtn").addEventListener("click", closeModal);
+  document.getElementById("modalOverlay").addEventListener("click", (e) => {
+    if (e.target.id === "modalOverlay") closeModal();
+  });
+
+  document.getElementById("customerForm").addEventListener("submit", onFormSubmit);
+  document.getElementById("deleteCustBtn").addEventListener("click", async () => {
+    if (!editingId) return;
+    if (confirm("Delete this customer? This can't be undone.")) {
+      await deleteCustomer(editingId);
+      closeModal();
+      toast("Customer deleted");
+    }
+  });
+
+  document.getElementById("searchInput").addEventListener("input", render);
+  document.getElementById("stageFilter").addEventListener("change", render);
+  document.getElementById("followFilter").addEventListener("change", render);
+
+  document.getElementById("viewBoardBtn").addEventListener("click", () => switchView("board"));
+  document.getElementById("viewListBtn").addEventListener("click", () => switchView("list"));
+
+  document.getElementById("exportBtn").addEventListener("click", exportCSV);
+}
+
+function switchView(v){
+  currentView = v;
+  document.getElementById("viewBoardBtn").classList.toggle("active", v === "board");
+  document.getElementById("viewListBtn").classList.toggle("active", v === "list");
+  document.getElementById("boardView").classList.toggle("hidden", v !== "board");
+  document.getElementById("listView").classList.toggle("hidden", v !== "list");
+  render();
+}
+
+function populateStageSelects(){
+  const stageFilter = document.getElementById("stageFilter");
+  const fStage = document.getElementById("f_stage");
+  STAGES.forEach(s => {
+    const o1 = document.createElement("option"); o1.value = s.key; o1.textContent = s.label;
+    stageFilter.appendChild(o1);
+    const o2 = document.createElement("option"); o2.value = s.key; o2.textContent = s.label;
+    fStage.appendChild(o2);
+  });
+}
+
+// ---------------- Modal ----------------
+function openModal(customer){
+  editingId = customer ? customer.id : null;
+  document.getElementById("modalTitle").textContent = customer ? "Edit customer" : "New customer";
+  document.getElementById("deleteCustBtn").classList.toggle("hidden", !customer);
+
+  document.getElementById("f_name").value = customer?.name || "";
+  document.getElementById("f_phone").value = customer?.phone || "";
+  document.getElementById("f_email").value = customer?.email || "";
+  document.getElementById("f_address").value = customer?.address || "";
+  document.getElementById("f_inquiry_type").value = customer?.inquiry_type || "Residential";
+  document.getElementById("f_roof_type").value = customer?.roof_type || "";
+  document.getElementById("f_system_size").value = customer?.system_size ?? "";
+  document.getElementById("f_budget").value = customer?.budget ?? "";
+  document.getElementById("f_utility").value = customer?.utility_company || "";
+  document.getElementById("f_stage").value = customer?.stage || STAGES[0].key;
+  document.getElementById("f_inquiry_date").value = customer?.inquiry_date || todayISO();
+  document.getElementById("f_follow_up_date").value = customer?.follow_up_date || "";
+  document.getElementById("f_next_action").value = customer?.next_action || "";
+
+  document.getElementById("modalOverlay").classList.remove("hidden");
+}
+
+function closeModal(){
+  document.getElementById("modalOverlay").classList.add("hidden");
+  document.getElementById("customerForm").reset();
+  editingId = null;
+}
+
+async function onFormSubmit(e){
+  e.preventDefault();
+  const btn = document.getElementById("saveCustBtn");
+  btn.disabled = true; btn.textContent = "Saving…";
+
+  const payload = {
+    name: document.getElementById("f_name").value.trim(),
+    phone: document.getElementById("f_phone").value.trim() || null,
+    email: document.getElementById("f_email").value.trim() || null,
+    address: document.getElementById("f_address").value.trim() || null,
+    inquiry_type: document.getElementById("f_inquiry_type").value,
+    roof_type: document.getElementById("f_roof_type").value || null,
+    system_size: document.getElementById("f_system_size").value ? Number(document.getElementById("f_system_size").value) : null,
+    budget: document.getElementById("f_budget").value ? Number(document.getElementById("f_budget").value) : null,
+    utility_company: document.getElementById("f_utility").value.trim() || null,
+    stage: document.getElementById("f_stage").value,
+    inquiry_date: document.getElementById("f_inquiry_date").value || null,
+    follow_up_date: document.getElementById("f_follow_up_date").value || null,
+    next_action: document.getElementById("f_next_action").value.trim() || null,
+  };
+
+  try {
+    await saveCustomer(payload, editingId);
+    closeModal();
+    toast(editingId ? "Customer updated" : "Customer added");
+  } catch (err) {
+    toast("Save failed: " + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "Save";
+  }
+}
+
+// ---------------- Rendering ----------------
+function getFiltered(){
+  const q = document.getElementById("searchInput").value.trim().toLowerCase();
+  const stageF = document.getElementById("stageFilter").value;
+  const followF = document.getElementById("followFilter").value;
+
+  return customers.filter(c => {
+    if (q) {
+      const hay = `${c.name || ""} ${c.phone || ""} ${c.email || ""}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    if (stageF && c.stage !== stageF) return false;
+    if (followF) {
+      const status = followUpStatus(c.follow_up_date);
+      if (status !== followF) return false;
+    }
+    return true;
+  });
+}
+
+function followUpStatus(dateStr){
+  if (!dateStr) return "none";
+  const today = todayISO();
+  if (dateStr < today) return "overdue";
+  if (dateStr === today) return "today";
+  return "upcoming";
+}
+
+function render(){
+  const filtered = getFiltered();
+  document.getElementById("emptyState").classList.toggle("hidden", customers.length > 0);
+  document.getElementById("boardView").classList.toggle("hidden", customers.length === 0 || currentView !== "board");
+  document.getElementById("listView").classList.toggle("hidden", customers.length === 0 || currentView !== "list");
+
+  renderStats();
+  if (currentView === "board") renderBoard(filtered);
+  else renderList(filtered);
+}
+
+function renderStats(){
+  const row = document.getElementById("statsRow");
+  row.innerHTML = "";
+  const total = customers.length;
+  const active = customers.filter(c => c.stage !== "won" && c.stage !== "lost").length;
+  const won = customers.filter(c => c.stage === "won").length;
+  const overdue = customers.filter(c => followUpStatus(c.follow_up_date) === "overdue").length;
+
+  const cards = [
+    { num: total, lbl: "Total customers" },
+    { num: active, lbl: "Active in pipeline" },
+    { num: won, lbl: "Won" },
+    { num: overdue, lbl: "Overdue follow-ups" },
+  ];
+  cards.forEach(c => {
+    const div = document.createElement("div");
+    div.className = "stat-card";
+    div.innerHTML = `<div class="num">${c.num}</div><div class="lbl">${c.lbl}</div>`;
+    row.appendChild(div);
+  });
+}
+
+function renderBoard(filtered){
+  const board = document.getElementById("boardView");
+  board.innerHTML = "";
+  STAGES.forEach(stage => {
+    const col = document.createElement("div");
+    col.className = "col";
+    col.dataset.stage = stage.key;
+
+    const head = document.createElement("div");
+    head.className = "col-head";
+    const inStage = filtered.filter(c => c.stage === stage.key);
+    head.innerHTML = `
+      <span><span class="dot" style="background:${stage.color}"></span><span class="title">${stage.label}</span></span>
+      <span class="count">${inStage.length}</span>`;
+    col.appendChild(head);
+
+    const body = document.createElement("div");
+    body.className = "col-body";
+    body.addEventListener("dragover", (e) => { e.preventDefault(); col.classList.add("drag-over"); });
+    body.addEventListener("dragleave", () => col.classList.remove("drag-over"));
+    body.addEventListener("drop", (e) => {
+      e.preventDefault();
+      col.classList.remove("drag-over");
+      const id = e.dataTransfer.getData("text/plain");
+      if (id) updateStage(id, stage.key);
+    });
+
+    inStage.forEach(c => body.appendChild(renderCard(c)));
+    col.appendChild(body);
+    board.appendChild(col);
+  });
+}
+
+function renderCard(c){
+  const card = document.createElement("div");
+  card.className = "card";
+  card.draggable = true;
+  card.addEventListener("dragstart", (e) => {
+    e.dataTransfer.setData("text/plain", c.id);
+    card.classList.add("dragging");
+  });
+  card.addEventListener("dragend", () => card.classList.remove("dragging"));
+  card.addEventListener("click", () => openModal(c));
+
+  const metaParts = [];
+  if (c.phone) metaParts.push(c.phone);
+  if (c.system_size) metaParts.push(`${c.system_size} kW`);
+  if (c.address) metaParts.push(c.address);
+
+  const fStatus = followUpStatus(c.follow_up_date);
+  const fLabel = c.follow_up_date
+    ? (fStatus === "overdue" ? `Overdue: ${formatDate(c.follow_up_date)}` :
+       fStatus === "today" ? "Follow up today" : `Follow up ${formatDate(c.follow_up_date)}`)
+    : "No follow-up set";
+
+  card.innerHTML = `
+    <div class="cname">${escapeHtml(c.name)}</div>
+    <div class="cmeta">${escapeHtml(metaParts.join(" · "))}</div>
+    <div class="cfollow ${fStatus}">${fLabel}</div>
+  `;
+  return card;
+}
+
+function renderList(filtered){
+  const body = document.getElementById("listBody");
+  body.innerHTML = "";
+  const stageMap = Object.fromEntries(STAGES.map(s => [s.key, s]));
+
+  filtered.forEach(c => {
+    const tr = document.createElement("tr");
+    tr.addEventListener("click", () => openModal(c));
+    const stage = stageMap[c.stage] || { label: c.stage, color: "#999" };
+    const fStatus = followUpStatus(c.follow_up_date);
+
+    tr.innerHTML = `
+      <td><strong>${escapeHtml(c.name)}</strong></td>
+      <td><span class="stage-pill" style="background:${stage.color}22; color:${stage.color};">${stage.label}</span></td>
+      <td>${escapeHtml(c.phone || "—")}</td>
+      <td>${escapeHtml(c.address || "—")}</td>
+      <td>${c.system_size ? c.system_size + " kW" : "—"}</td>
+      <td><span class="cfollow ${fStatus}" style="display:inline-block;">${c.follow_up_date ? formatDate(c.follow_up_date) : "Not set"}</span></td>
+      <td>${c.inquiry_date ? formatDate(c.inquiry_date) : "—"}</td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+// ---------------- Export ----------------
+function exportCSV(){
+  if (!customers.length) { toast("No customers to export yet"); return; }
+  const cols = ["name","phone","email","address","inquiry_type","roof_type","system_size","budget","utility_company","stage","inquiry_date","follow_up_date","next_action"];
+  const rows = [cols.join(",")];
+  customers.forEach(c => {
+    rows.push(cols.map(k => csvEscape(c[k])).join(","));
+  });
+  const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `suntrack-customers-${todayISO()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+function csvEscape(val){
+  if (val === null || val === undefined) return "";
+  const s = String(val).replace(/"/g, '""');
+  return /[",\n]/.test(s) ? `"${s}"` : s;
+}
+
+// ---------------- Helpers ----------------
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+function formatDate(iso){
+  const d = new Date(iso + "T00:00:00");
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+function escapeHtml(str){
+  if (str === null || str === undefined) return "";
+  return String(str).replace(/[&<>"']/g, s => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[s]));
+}
+let toastTimer;
+function toast(msg){
+  let el = document.querySelector(".toast");
+  if (!el) { el = document.createElement("div"); el.className = "toast"; document.body.appendChild(el); }
+  el.textContent = msg;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.remove(), 3200);
+}
+
+init();
+</script>
+</body>
+</html>
